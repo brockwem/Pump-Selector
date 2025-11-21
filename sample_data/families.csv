@@ -1,0 +1,3 @@
+family_id,name,size_code,stages,allowed_speeds_rpm,Dref_mm,Dmin_mm,Dmax_mm,Q_shutoff,Q_runout,H_shutoff,max_power_hp
+ES-8x6-13,End Suction 8x6,8x6,1,"1750|3500",317,280,340,0,1200,140,50
+ES-6x4-11,End Suction 6x4,6x4,1,"3500",290,260,320,0,800,210,40

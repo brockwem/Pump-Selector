@@ -1,0 +1,131 @@
+[
+  {
+    "name": "baseline pass",
+    "request": {
+      "duty": {
+        "Q": {
+          "value": 100,
+          "unit": "gpm"
+        },
+        "H": {
+          "value": 100,
+          "unit": "ft"
+        }
+      },
+      "sg": 1.0,
+      "speedPreference": [
+        1750,
+        3500
+      ],
+      "tolerances": {
+        "head_pct": 3.0
+      },
+      "weights": {
+        "bep": 0.4,
+        "eff": 0.25,
+        "speed": 0.1,
+        "price": 0.15,
+        "lead": 0.1
+      },
+      "pumpsInParallel": 1,
+      "returnPlotData": false
+    },
+    "expected": "PASS"
+  },
+  {
+    "name": "near runout",
+    "request": {
+      "duty": {
+        "Q": {
+          "value": 1100,
+          "unit": "gpm"
+        },
+        "H": {
+          "value": 38,
+          "unit": "ft"
+        }
+      },
+      "sg": 1.0,
+      "speedPreference": [
+        1750
+      ],
+      "tolerances": {
+        "head_pct": 3.0
+      },
+      "weights": {
+        "bep": 0.4,
+        "eff": 0.25,
+        "speed": 0.1,
+        "price": 0.15,
+        "lead": 0.1
+      },
+      "pumpsInParallel": 1,
+      "returnPlotData": false
+    },
+    "expected": "PASS"
+  },
+  {
+    "name": "below min flow",
+    "request": {
+      "duty": {
+        "Q": {
+          "value": -10,
+          "unit": "gpm"
+        },
+        "H": {
+          "value": 120,
+          "unit": "ft"
+        }
+      },
+      "sg": 1.0,
+      "speedPreference": [
+        1750
+      ],
+      "tolerances": {
+        "head_pct": 3.0
+      },
+      "weights": {
+        "bep": 0.4,
+        "eff": 0.25,
+        "speed": 0.1,
+        "price": 0.15,
+        "lead": 0.1
+      },
+      "pumpsInParallel": 1,
+      "returnPlotData": false
+    },
+    "expected": "FAIL"
+  },
+  {
+    "name": "high speed check",
+    "request": {
+      "duty": {
+        "Q": {
+          "value": 100,
+          "unit": "gpm"
+        },
+        "H": {
+          "value": 400,
+          "unit": "ft"
+        }
+      },
+      "sg": 1.0,
+      "speedPreference": [
+        3500
+      ],
+      "tolerances": {
+        "head_pct": 3.0
+      },
+      "weights": {
+        "bep": 0.4,
+        "eff": 0.25,
+        "speed": 0.1,
+        "price": 0.15,
+        "lead": 0.1
+      },
+      "pumpsInParallel": 1,
+      "returnPlotData": false
+    },
+    "expected": "PASS"
+  }
+]
