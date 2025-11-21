@@ -1,23 +1,35 @@
+# app/main.py
 import os, io
 from fastapi import FastAPI, Body, UploadFile, File, HTTPException, Header
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
+
+# local imports
 from app.data.loader import load_data
-from app.engine.select import Curve, interp, hydraulic_power_kw, ft_to_m, to_m3s_gpm, pick_motor_hp, find_bep_Q, score_candidate
+from app.engine.select import (
+    Curve, interp, hydraulic_power_kw, ft_to_m, to_m3s_gpm,
+    pick_motor_hp, find_bep_Q, score_candidate
+)
 from app.pdf.datasheet import generate_pdf
 
 API_KEY = os.getenv("API_KEY","changeme-very-secret")
 DATA_DIR = os.getenv("DATA_DIR","./sample_data")
 CURVEPACK_VERSION = os.getenv("CURVEPACK_VERSION","curvepack_demo")
+
 families, pricing, curves = load_data(DATA_DIR)
 
 app = FastAPI(title="HydraulicSelectionService", version="1.0.0")
 
 @app.get("/health")
-def health(): return {"status":"ok"}
+def health():
+    return {"status": "ok"}
+
 @app.get("/version")
-def version(): return {"service":"hydraulics","api":app.version,"curvepack":CURVEPACK_VERSION}
+def version():
+    return {"service": "hydraulics", "api": app.version, "curvepack": CURVEPACK_VERSION}
+
+# --------- Selection API ----------
 
 class DutyValue(BaseModel):
     value: float; unit: str
@@ -47,26 +59,32 @@ def unitize_H(value, unit):
 
 @app.post("/hydraulics/select")
 def select(req: SelectRequest, x_api_key: Optional[str] = Header(default=None)):
-    if x_api_key != API_KEY: raise HTTPException(status_code=401, detail="Unauthorized")
+    if x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     Q_req_gpm = unitize_Q(req.duty.Q.value, req.duty.Q.unit)
     H_req_ft = unitize_H(req.duty.H.value, req.duty.H.unit)
     head_tol = req.tolerances.get('head_pct',3.0)/100.0
     results=[]
     for (fid, sp), curve in curves.items():
         if sp not in req.speedPreference: continue
-        # interpolate at duty
-        try: Hc, Ec, Pc, Nc = interp(curve, Q_req_gpm, method="pchip")
-        except Exception: continue
-        if abs(Hc - H_req_ft)/max(1.0,H_req_ft) > head_tol: continue
+        try:
+            Hc, Ec, Pc, Nc = interp(curve, Q_req_gpm, method="pchip")
+        except Exception:
+            continue
+        if abs(Hc - H_req_ft)/max(1.0,H_req_ft) > head_tol: 
+            continue
+        # derive power if not in curve
         if not Pc or Pc <= 0:
             Q_m3s = to_m3s_gpm(Q_req_gpm); H_m = ft_to_m(Hc)
             Ph_kw = hydraulic_power_kw(Q_m3s, H_m, rho=998.2*req.sg)
             Pc = Ph_kw / (max(Ec/100.0,0.01)*0.98) * 1.34102
+        # motor pick
         Q_m3s = to_m3s_gpm(Q_req_gpm); H_m = ft_to_m(Hc)
         Ph_kw = hydraulic_power_kw(Q_m3s, H_m, rho=998.2*req.sg)
         shaft_kw = Ph_kw / (max(Ec/100.0,0.01)*0.98)
         motor_kw_apply = shaft_kw / 0.93
         motor_hp = pick_motor_hp(motor_kw_apply)
+        # scoring
         Q_bep = find_bep_Q(curve)
         bep_offset = abs(Q_req_gpm - Q_bep)/max(Q_bep,1.0)*100.0
         pb, lt = pricing.get(fid, ("PB3","LT3"))
@@ -82,15 +100,18 @@ def select(req: SelectRequest, x_api_key: Optional[str] = Header(default=None)):
     results.sort(key=lambda x: x['score'], reverse=True)
     payload={"versionTag": CURVEPACK_VERSION, "candidates": results[:5]}
     if req.returnPlotData and results:
+        # Just return one set of raw curve arrays for plotting
         any_key=list(curves.keys())[0]; c=curves[any_key]
         payload["plotData"]={"Q":c.Q,"H":c.H,"Eff":c.Eff,"Power":c.P,"NPSHr":c.NPSHr}
     return JSONResponse(payload)
 
 class PDFRequest(BaseModel):
     selection: dict; branding: Optional[dict] = None; quote: Optional[dict] = None
+
 @app.post("/pdf")
 def pdf(req: PDFRequest, x_api_key: Optional[str] = Header(default=None)):
-    if x_api_key != API_KEY: raise HTTPException(status_code=401, detail="Unauthorized")
+    if x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     buf = io.BytesIO()
     meta={"title": (req.branding or {}).get("title","Pump Selection Datasheet"),
           "curvepack": CURVEPACK_VERSION, "quote_id": (req.quote or {}).get("id","N/A")}
@@ -99,8 +120,10 @@ def pdf(req: PDFRequest, x_api_key: Optional[str] = Header(default=None)):
           "eta_pct": req.selection.get("eta_pct"), "bep_offset_pctQ": req.selection.get("bep_offset_pctQ"),
           "head_ft": (req.selection.get("head") or {}).get("value"),
           "power_hp": (req.selection.get("power") or {}).get("value"),
-          "npshr_ft": req.selection.get("npshr_ft"), "motor_hp": (req.selection.get("motor_pick") or {}).get("rating_hp"),
-          "price_band": req.selection.get("price_band"), "lead_time": req.selection.get("lead_time"),
+          "npshr_ft": req.selection.get("npshr_ft"),
+          "motor_hp": (req.selection.get("motor_pick") or {}).get("rating_hp"),
+          "price_band": req.selection.get("price_band"),
+          "lead_time": req.selection.get("lead_time"),
           "score": req.selection.get("score")}
     generate_pdf(buf, flat, meta); buf.seek(0)
     return StreamingResponse(buf, media_type="application/pdf",
